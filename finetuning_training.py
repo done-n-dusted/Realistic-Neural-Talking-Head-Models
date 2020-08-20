@@ -30,7 +30,8 @@ path_to_images = 'examples/fine_tuning/test_images'
 """Create dataset and net"""
 choice = ''
 while choice != '0' and choice != '1':
-    choice = input('What source to finetune on?\n0: Video\n1: Images\n\nEnter number\n>>')
+#     choice = input('What source to finetune on?\n0: Video\n1: Images\n\nEnter number\n>>')
+    choice = '0'  
 if choice == '0': #video
     dataset = FineTuningVideoDataset(path_to_video, device)
 else: #Images
