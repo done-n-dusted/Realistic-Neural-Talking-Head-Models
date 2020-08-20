@@ -53,16 +53,16 @@ E.load_state_dict(checkpoint['E_state_dict'])
 with torch.no_grad():
     #forward
     # Calculate average encoding vector for video
-    f_lm = f_lm_video
-    f_lm_compact = f_lm.view(-1, f_lm.shape[-4], f_lm.shape[-3], f_lm.shape[-2], f_lm.shape[-1]) #BxT,2,3,224,224
+    f_lm = f_lm_video #[1, 32, 256, 256, 2, 3]
+    f_lm_compact = f_lm.reshape(-1, f_lm.shape[-2], f_lm.shape[-1], f_lm.shape[-3], f_lm.shape[-4]) #BxT,2,3,224,224
+    print(f_lm_compact.shape)
     e_vectors = E(f_lm_compact[:,0,:,:,:], f_lm_compact[:,1,:,:,:]) #BxT,512,1
     e_vectors = e_vectors.view(-1, f_lm.shape[1], 512, 1) #B,T,512,1
     e_hat_video = e_vectors.mean(dim=1)
     
-    
     f_lm = f_lm_images
-    f_lm_compact = f_lm.view(-1, f_lm.shape[-4], f_lm.shape[-3], f_lm.shape[-2], f_lm.shape[-1]) #BxT,2,3,224,224
-    e_vectors = E(f_lm_compact[:,0,:,:,:], f_lm_compact[:,1,:,:,:]) #BxT,512,1
+    f_lm_compact = f_lm.reshape(-1, f_lm.shape[-4], f_lm.shape[-3], f_lm.shape[-2], f_lm.shape[-1]) #BxT,2,3,256,256
+    e_vectors = E.forward(f_lm_compact[:,0,:,:,:], f_lm_compact[:,1,:,:,:]) #BxT,512,1
     e_vectors = e_vectors.view(-1, f_lm.shape[1], 512, 1) #B,T,512,1
     e_hat_images = e_vectors.mean(dim=1)
 
@@ -71,7 +71,9 @@ print('Saving e_hat...')
 torch.save({
         'e_hat': e_hat_video
         }, path_to_e_hat_video)
+print('video to', path_to_e_hat_video)
 torch.save({
         'e_hat': e_hat_images
         }, path_to_e_hat_images)
+print('imgs to', path_to_e_hat_images)
 print('...Done saving')
