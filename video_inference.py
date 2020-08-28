@@ -42,7 +42,7 @@ ret = True
 i = 0
 size = (256*3,256)
 #out = cv2.VideoWriter('project.mp4',cv2.VideoWriter_fourcc('M','P','4','2'), 30, size)
-video = cv2.VideoWriter('project.mp4',cv2.VideoWriter_fourcc(*'DIVX'), fps, size)
+video = cv2.VideoWriter('project.mp4',cv2.VideoWriter_fourcc(*'MP4V'), fps, size)
 
 with torch.no_grad():
     while ret:
