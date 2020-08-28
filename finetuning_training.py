@@ -204,7 +204,7 @@ while cont:
                     plt.xticks([])
                     plt.yticks([])
                     plt.draw()
-                    plt.pause(0.001)
+#                     plt.pause(0.001)
         
     num_epochs = int(input('Num epoch further?\n'))
     cont = num_epochs != 0
