@@ -16,7 +16,7 @@ from tqdm import tqdm
 #Paths
 path_to_model_weights = 'finetuned_model.tar'
 path_to_embedding = 'e_hat_video.tar'
-path_to_mp4 = 'test_vid2.webm'
+path_to_mp4 = 'test1.mp4'
 
 device = torch.device("cuda:0")
 cpu = torch.device("cpu")
