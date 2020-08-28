@@ -42,7 +42,7 @@ e_hat = torch.load(path_to_embedding, map_location=cpu)
 e_hat = e_hat['e_hat']
 
 G = Generator(256, finetuning = True, e_finetuning = e_hat)
-D = Discriminator(dataset.__len__(), path_to_Wi, finetuning = True, e_finetuning = e_hat)
+D = Discriminator(dataset.__len__(), finetuning = True, e_finetuning = e_hat)
 
 G.train()
 D.train()
