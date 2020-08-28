@@ -1,18 +1,16 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from .blocks import ResBlockDown, SelfAttention, ResBlock, ResBlockD, ResBlockUp, Padding, adaIN
+from .blocks import ResBlockDown, SelfAttention, ResBlock, ResBlockD, ResBlockUp, Padding
 import math
 import sys
-import os
-from tqdm import tqdm
 
 #components
 class Embedder(nn.Module):
     def __init__(self, in_height):
         super(Embedder, self).__init__()
         
-        self.relu = nn.LeakyReLU(inplace=False)
+        self.relu = nn.ReLU(inplace=True)
         
         #in 6*224*224
         self.pad = Padding(in_height) #out 6*256*256
@@ -26,6 +24,7 @@ class Embedder(nn.Module):
         self.sum_pooling = nn.AdaptiveMaxPool2d((1,1)) #out 512*1*1
 
     def forward(self, x, y):
+        
         out = torch.cat((x,y),dim = -3) #out 6*224*224
         out = self.pad(out) #out 6*256*256
         out = self.resDown1(out) #out 64*128*128
@@ -44,18 +43,19 @@ class Embedder(nn.Module):
         return out
 
 class Generator(nn.Module):
-    P_LEN = 2*(512*2*5 + 512+256 + 256+128 + 128+64 + 64+32 + 32)
+    P_LEN = 2*(512*2*5 + 512*2 + 512*2+ 512+256 + 256+128 + 128+64 + 64+3)
     slice_idx = [0,
                 512*4, #res1
                 512*4, #res2
                 512*4, #res3
                 512*4, #res4
                 512*4, #res5
-                512*2 + 256*2, #resUp1
-                256*2 + 128*2, #resUp2
-                128*2 + 64*2, #resUp3
-                64*2 + 32*2, #resUp4
-                32*2] #last adain
+                512*4, #resUp1
+                512*4, #resUp2
+                512*2 + 256*2, #resUp3
+                256*2 + 128*2, #resUp4
+                128*2 + 64*2, #resUp5
+                64*2 + 3*2] #resUp6
     for i in range(1, len(slice_idx)):
         slice_idx[i] = slice_idx[i-1] + slice_idx[i]
     
@@ -63,7 +63,6 @@ class Generator(nn.Module):
         super(Generator, self).__init__()
         
         self.sigmoid = nn.Sigmoid()
-        self.relu = nn.LeakyReLU(inplace = False)
         
         #in 3*224*224 for voxceleb2
         self.pad = Padding(in_height) #out 3*256*256
@@ -83,25 +82,32 @@ class Generator(nn.Module):
         self.resDown4 = ResBlockDown(256, 512) #out 512*16*16
         self.in4 = nn.InstanceNorm2d(512, affine=True)
         
+        self.resDown5 = ResBlockDown(512, 512) #out 512*8*8
+        self.in5 = nn.InstanceNorm2d(512, affine=True)
+        
+        self.resDown6 = ResBlockDown(512, 512) #out 512*4*4
+        self.in6 = nn.InstanceNorm2d(512, affine=True)
+        
         #Res
-        #in 512*16*16
+        #in 512*4*4
         self.res1 = ResBlock(512)
         self.res2 = ResBlock(512)
         self.res3 = ResBlock(512)
         self.res4 = ResBlock(512)
         self.res5 = ResBlock(512)
-        #out 512*16*16
+        #out 512*4*4
         
         #Up
-        #in 512*16*16
-        self.resUp1 = ResBlockUp(512, 256) #out 256*32*32
-        self.resUp2 = ResBlockUp(256, 128) #out 128*64*64
+        #in 512*4*4
+        self.resUp1 = ResBlockUp(512, 512) #out 512*8*8
+        self.resUp2 = ResBlockUp(512, 512) #out 512*16*16
+        self.resUp3 = ResBlockUp(512, 256) #out 256*32*32
+        self.resUp4 = ResBlockUp(256, 128) #out 128*64*64
         
         self.self_att_Up = SelfAttention(128) #out 128*64*64
-
-        self.resUp3 = ResBlockUp(128, 64) #out 64*128*128
-        self.resUp4 = ResBlockUp(64, 32, out_size=(in_height, in_height), scale=None, conv_size=3, padding_size=1) #out 3*224*224
-        self.conv2d = nn.Conv2d(32, 3, 3, padding = 1)
+        
+        self.resUp5 = ResBlockUp(128, 64)  #out 64*128*128
+        self.resUp6 = ResBlockUp(64, 3, out_size=(in_height, in_height), scale=None, conv_size=9, padding_size=4) #out 3*224*224
         
         self.p = nn.Parameter(torch.rand(self.P_LEN,512).normal_(0.0,0.02))
         
@@ -123,7 +129,7 @@ class Generator(nn.Module):
         else:
             p = self.p.unsqueeze(0)
             p = p.expand(e.shape[0],self.P_LEN,512)
-            e_psi = torch.bmm(p, e) #B, p_len, 1
+            e_psi = torch.bmm(p, e)
         
         #in 3*224*224 for voxceleb2
         out = self.pad(y)
@@ -143,6 +149,12 @@ class Generator(nn.Module):
         out = self.resDown4(out)
         out = self.in4(out)
         
+        out = self.resDown5(out)
+        out = self.in5(out)
+        
+        out = self.resDown6(out)
+        out = self.in6(out)
+        
         
         #Residual
         out = self.res1(out, e_psi[:, self.slice_idx[0]:self.slice_idx[1], :])
@@ -157,46 +169,25 @@ class Generator(nn.Module):
         
         out = self.resUp2(out, e_psi[:, self.slice_idx[6]:self.slice_idx[7], :])
         
-        out = self.self_att_Up(out)
-
         out = self.resUp3(out, e_psi[:, self.slice_idx[7]:self.slice_idx[8], :])
         
         out = self.resUp4(out, e_psi[:, self.slice_idx[8]:self.slice_idx[9], :])
         
-        out = adaIN(out,
-                    e_psi[:,
-                          self.slice_idx[9]:(self.slice_idx[10]+self.slice_idx[9])//2,
-                          :],
-                    e_psi[:,
-                          (self.slice_idx[10]+self.slice_idx[9])//2:self.slice_idx[10],
-                          :]
-                   )
+        out = self.self_att_Up(out)
         
-        out = self.relu(out)
+        out = self.resUp5(out, e_psi[:, self.slice_idx[9]:self.slice_idx[10], :])
         
-        out = self.conv2d(out)
-        
+        out = self.resUp6(out, e_psi[:, self.slice_idx[10]:self.slice_idx[11], :])
         out = self.sigmoid(out)
         
-        #out = out*255
+        out = out*255
         
         #out 3*224*224
         return out
-
-# class W_i_class(nn.Module):
-#     def __init__(self):
-#         super(W_i_class, self).__init__()
-#         self.W_i = nn.Parameter(torch.randn(512,2))
-    
-#     def forward(self):
-#         return self.W_i
-
+        
 class Discriminator(nn.Module):
-    def __init__(self, num_videos, path_to_Wi, finetuning=False, e_finetuning=None):
+    def __init__(self, num_videos, finetuning=False, e_finetuning=None):
         super(Discriminator, self).__init__()
-        self.path_to_Wi = path_to_Wi
-        self.gpu_num = torch.cuda.device_count()
-        self.relu = nn.LeakyReLU()
         
         #in 6*224*224
         self.pad = Padding(224) #out 6*256*256
@@ -209,18 +200,8 @@ class Discriminator(nn.Module):
         self.resDown6 = ResBlockDown(512, 512) #out 512*4*4
         self.res = ResBlockD(512) #out 512*4*4
         self.sum_pooling = nn.AdaptiveAvgPool2d((1,1)) #out 512*1*1
-
         
-        if not finetuning:
-            print('Initializing Discriminator weights')
-            if not os.path.isdir(self.path_to_Wi):
-                os.mkdir(self.path_to_Wi)
-            for i in tqdm(range(num_videos)):
-                if not os.path.isfile(self.path_to_Wi+'/W_'+str(i)+'/W_'+str(i)+'.tar'):
-                    w_i = torch.rand(512, 1)
-                    os.mkdir(self.path_to_Wi+'/W_'+str(i))
-                    torch.save({'W_i': w_i}, self.path_to_Wi+'/W_'+str(i)+'/W_'+str(i)+'.tar')
-        self.W_i = nn.Parameter(torch.randn(512, 32))
+        self.W_i = nn.Parameter(torch.rand(512, num_videos))
         self.w_0 = nn.Parameter(torch.randn(512,1))
         self.b = nn.Parameter(torch.randn(1))
         
@@ -231,10 +212,7 @@ class Discriminator(nn.Module):
     def finetuning_init(self):
         if self.finetuning:
             self.w_prime = nn.Parameter( self.w_0 + self.e_finetuning.mean(dim=0))
-    
-    def load_W_i(self, W_i):
-        self.W_i.data = self.relu(W_i)
-    
+        
     def forward(self, x, y, i):
         out = torch.cat((x,y), dim=-3) #out B*6*224*224
         
@@ -258,17 +236,12 @@ class Discriminator(nn.Module):
         
         out = self.sum_pooling(out7)
         
-        out = self.relu(out)
-        
-        out = out.squeeze(-1) #out B*512*1
-        
-        batch_start_idx = torch.cuda.current_device() * self.W_i.shape[1]//self.gpu_num
-        batch_end_idx = (torch.cuda.current_device() + 1) * self.W_i.shape[1]//self.gpu_num
+        out = out.view(-1,512,1) #out B*512*1
         
         if self.finetuning:
             out = torch.bmm(out.transpose(1,2), (self.w_prime.unsqueeze(0).expand(out.shape[0],512,1))) + self.b
         else:
-            out = torch.bmm(out.transpose(1,2), (self.W_i[:, batch_start_idx:batch_end_idx].unsqueeze(-1)).transpose(0,1) + self.w_0) + self.b #1x1
+            out = torch.bmm(out.transpose(1,2), (self.W_i[:,i].unsqueeze(-1)).transpose(0,1) + self.w_0) + self.b #1x1
         
         return out, [out1 , out2, out3, out4, out5, out6, out7]
 
@@ -331,7 +304,6 @@ class Cropped_VGG19(nn.Module):
         pool4           = F.max_pool2d(pool4_pad, kernel_size=(2, 2), stride=(2, 2), padding=0, ceil_mode=False)
         conv5_1_pad     = F.pad(pool4, (1, 1, 1, 1))
         conv5_1         = self.conv5_1(conv5_1_pad)
-        relu5_1         = F.relu(conv5_1)
         
-        return [relu1_1, relu2_1, relu3_1, relu4_1, relu5_1]
+        return [conv1_1, conv2_1, conv3_1, conv4_1, conv5_1]
     
