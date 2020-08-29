@@ -155,8 +155,8 @@ while cont:
                       % (epoch, num_epochs, i_batch, len(dataLoader),
                          lossD.item(), lossG.item(), r.mean(), r_hat.mean()))
                 lol_lossG.append(lossG.item())
-		lol_lossD.append(lossD.item())
-		lol_epoch.append(epoch)
+                lol_lossD.append(lossD.item())
+                lol_epoch.append(epoch)
 		"""
                 plt.clf()
                 out = x_hat.transpose(1,3)[0]
