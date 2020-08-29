@@ -90,6 +90,9 @@ D.to(device)
 """Training"""
 batch_start = datetime.now()
 
+lol_lossG = []
+lol_lossD = []
+lol_epoch = []
 cont = True
 while cont:
     for epoch in range(num_epochs):
@@ -151,7 +154,10 @@ while cont:
                 print('[%d/%d][%d/%d]\tLoss_D: %.4f\tLoss_G: %.4f\tD(x): %.4f\tD(G(y)): %.4f'
                       % (epoch, num_epochs, i_batch, len(dataLoader),
                          lossD.item(), lossG.item(), r.mean(), r_hat.mean()))
-                """
+                lol_lossG.append(lossG.item())
+		lol_lossD.append(lossD.item())
+		lol_epoch.append(epoch)
+		"""
                 plt.clf()
                 out = x_hat.transpose(1,3)[0]
                 for img_no in range(1,x_hat.shape[0]):
@@ -204,8 +210,12 @@ while cont:
                     plt.xticks([])
                     plt.yticks([])
                     plt.show()
-                    plt.pause(0.001)
-        
+#                     plt.pause(0.001)
+    plt.figure()
+    plt.plot(lol_epoch, lol_lossG)
+    plt.plot(lol_epoch, lol_lossD)
+    plt.show()
+	
     num_epochs = int(input('Num epoch further?\n'))
     cont = num_epochs != 0
 
