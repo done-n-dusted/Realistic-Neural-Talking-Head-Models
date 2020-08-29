@@ -89,7 +89,9 @@ with torch.no_grad():
             img = np.concatenate((me, landmark, fake), axis=1)
             img = img.astype('uint8')
             video.write(img)
-
+            plt.figure()
+            plt.imshow(img)
+            plt.show()
             i+=1
             print(i,'/',n_frames)
 cap.release()
