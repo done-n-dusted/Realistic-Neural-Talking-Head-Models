@@ -157,7 +157,7 @@ while cont:
                 lol_lossG.append(lossG.item())
                 lol_lossD.append(lossD.item())
                 lol_epoch.append(epoch)
-		"""
+                """
                 plt.clf()
                 out = x_hat.transpose(1,3)[0]
                 for img_no in range(1,x_hat.shape[0]):
@@ -182,8 +182,10 @@ while cont:
                 plt.imshow(out)
                 plt.show()
     
-            lossesD.append(lossD.item())
-            lossesG.append(lossG.item())"""
+                lossesD.append(lossD.item())
+                lossesG.append(lossG.item())
+                """
+            
             if display_training:
                     plt.clf()
                     out = (x_hat[0]*255).transpose(0,2)
